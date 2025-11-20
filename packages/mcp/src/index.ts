@@ -61,10 +61,6 @@ server.tool(
             .string()
             .describe(`Filter repositories by when they were last indexed by Sourcebot (NOT by commit time). Only searches in repos indexed before this date. Supports ISO 8601 (e.g., '2024-12-31') or relative formats (e.g., 'yesterday').`)
             .optional(),
-        includeDeletedFiles: z
-            .boolean()
-            .describe(`Whether to include deleted files in the search results (default: false).`)
-            .optional(),
         maxTokens: numberSchema
             .describe(`The maximum number of tokens to return (default: ${env.DEFAULT_MINIMUM_TOKENS}). Higher values provide more context but consume more tokens. Values less than ${env.DEFAULT_MINIMUM_TOKENS} will be ignored.`)
             .transform((val) => (val < env.DEFAULT_MINIMUM_TOKENS ? env.DEFAULT_MINIMUM_TOKENS : val))
@@ -80,7 +76,6 @@ server.tool(
         gitRevision,
         since,
         until,
-        includeDeletedFiles = false,
     }) => {
         if (repoIds.length > 0) {
             query += ` ( repo:${repoIds.map(id => escapeStringRegexp(id)).join(' or repo:')} )`;
@@ -103,7 +98,6 @@ server.tool(
             gitRevision,
             since,
             until,
-            includeDeletedFiles,
         });
 
         if (isServiceError(response)) {

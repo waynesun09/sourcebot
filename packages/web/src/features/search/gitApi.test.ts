@@ -15,7 +15,17 @@ vi.mock('@/lib/serviceError', () => ({
     }),
 }));
 vi.mock('@/actions', () => ({
-    sew: (fn: () => any) => fn(),
+    sew: async (fn: () => any) => {
+        try {
+            return await fn();
+        } catch (error) {
+            // Mock sew to convert thrown errors to ServiceError
+            return {
+                errorCode: 'UNEXPECTED_ERROR',
+                message: error instanceof Error ? error.message : String(error),
+            };
+        }
+    },
 }));
 
 // Import mocked modules
@@ -325,24 +335,30 @@ describe('searchCommits', () => {
             });
         });
 
-        it('should throw for other Error instances', async () => {
+        it('should return ServiceError for other Error instances', async () => {
             mockGitLog.mockRejectedValue(new Error('some other error'));
 
-            await expect(
-                searchCommits({
-                    repoId: 123,
-                })
-            ).rejects.toThrow('Failed to search commits in repository 123');
+            const result = await searchCommits({
+                repoId: 123,
+            });
+
+            expect(result).toMatchObject({
+                errorCode: 'UNEXPECTED_ERROR',
+                message: expect.stringContaining('Failed to search commits in repository 123'),
+            });
         });
 
-        it('should throw for non-Error exceptions', async () => {
+        it('should return ServiceError for non-Error exceptions', async () => {
             mockGitLog.mockRejectedValue('string error');
 
-            await expect(
-                searchCommits({
-                    repoId: 123,
-                })
-            ).rejects.toThrow('Failed to search commits in repository 123');
+            const result = await searchCommits({
+                repoId: 123,
+            });
+
+            expect(result).toMatchObject({
+                errorCode: 'UNEXPECTED_ERROR',
+                message: expect.stringContaining('Failed to search commits in repository 123'),
+            });
         });
     });
 

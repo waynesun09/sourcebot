@@ -181,7 +181,6 @@ Fetches code that matches the provided regex pattern in `query`.
 | `gitRevision`         | no       | Git revision to search (e.g., 'main', 'develop', 'v1.0.0'). Defaults to HEAD.                                                    |
 | `since`               | no       | Only search repos indexed after this date. Supports ISO 8601 or relative (e.g., "30 days ago").                                   |
 | `until`               | no       | Only search repos indexed before this date. Supports ISO 8601 or relative (e.g., "yesterday").                                    |
-| `includeDeletedFiles` | no       | Include deleted files in search results (default: false).                                                                         |
 | `maxTokens`           | no       | Max tokens to return (default: env.DEFAULT_MINIMUM_TOKENS).                                                                       |
 </details>
 

@@ -127,7 +127,7 @@ const getFileWebUrl = (template: string, branch: string, fileName: string): stri
     return encodeURI(url + optionalQueryParams);
 }
 
-export const search = async ({ query, matches, contextLines, whole, gitRevision, since, until, includeDeletedFiles }: SearchRequest): Promise<SearchResponse | ServiceError> => sew(() =>
+export const search = async ({ query, matches, contextLines, whole, gitRevision, since, until }: SearchRequest): Promise<SearchResponse | ServiceError> => sew(() =>
     withOptionalAuthV2(async ({ org, prisma }) => {
         // If gitRevision is provided, append it to the query as a branch filter.
         if (gitRevision) {

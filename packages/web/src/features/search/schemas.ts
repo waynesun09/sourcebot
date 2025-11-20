@@ -36,8 +36,6 @@ export const searchRequestSchema = z.object({
     since: z.string().optional(),
     // Filter by date. Only show results that were indexed before this date.
     until: z.string().optional(),
-    // Whether to include deleted files in the search results.
-    includeDeletedFiles: z.boolean().optional(),
 });
 
 export const repositoryInfoSchema = z.object({
@@ -169,3 +167,24 @@ export const fileSourceResponseSchema = z.object({
     branch: z.string().optional(),
     webUrl: z.string().optional(),
 });
+
+export const searchCommitsRequestSchema = z.object({
+    repoId: z.number(),
+    query: z.string().optional(),
+    since: z.string().optional(),
+    until: z.string().optional(),
+    author: z.string().optional(),
+    maxCount: z.number().int().positive().max(500).optional(),
+});
+
+export const commitSchema = z.object({
+    hash: z.string(),
+    date: z.string(),
+    message: z.string(),
+    refs: z.string(),
+    body: z.string(),
+    author_name: z.string(),
+    author_email: z.string(),
+});
+
+export const searchCommitsResponseSchema = z.array(commitSchema);

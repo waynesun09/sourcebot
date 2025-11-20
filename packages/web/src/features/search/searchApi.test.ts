@@ -1,35 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as dateUtils from './dateUtils';
 
-// Mock dependencies
-vi.mock('@/lib/serviceError', () => ({
-    ServiceError: class ServiceError extends Error {
-        errorCode: string;
-        constructor(errorCode: string, message: string) {
-            super(message);
-            this.errorCode = errorCode;
-        }
-    },
-    isServiceError: (obj: any) => obj?.errorCode !== undefined,
-}));
-
-vi.mock('@/actions', () => ({
-    sew: (fn: () => any) => fn(),
-}));
-
-vi.mock('@/lib/auth', () => ({
-    withOptionalAuthV2: (fn: (context: any) => any) => {
-        return fn({
-            org: { id: 1 },
-            prisma: {
-                repo: {
-                    findMany: vi.fn(),
-                },
-            },
-        });
-    },
-}));
-
 describe('searchApi temporal parameter handling', () => {
     describe('date utility integration', () => {
         beforeEach(() => {

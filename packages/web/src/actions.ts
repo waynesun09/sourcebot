@@ -497,25 +497,26 @@ export const getRepos = async ({
             // Filter repos by commit activity using git log
             // Note: This requires repos to be cloned locally
             const activityChecks = await Promise.all(repos.map(async (repo) => {
-                try {
-                    const commits = await searchCommits({
-                        repoId: repo.id,
-                        since: activeAfter,
-                        until: activeBefore,
-                        maxCount: 1,
-                    });
+                const result = await searchCommits({
+                    repoId: repo.id,
+                    since: activeAfter,
+                    until: activeBefore,
+                    maxCount: 1,
+                });
 
-                    if (Array.isArray(commits) && commits.length > 0) {
-                        return repo;
-                    }
-                } catch (e) {
-                    // If error (e.g. repo not found on disk), exclude it from results
-                    // This is expected for repos that haven't been cloned yet
-                    const errorMessage = e instanceof Error ? e.message : String(e);
-                    if (!errorMessage.includes('does not exist')) {
-                        // Log unexpected errors, but not "repo not on disk" errors
-                        console.error(`Error checking activity for repo ${repo.id} (${repo.name}):`, e);
-                    }
+                // Handle successful result
+                if (Array.isArray(result)) {
+                    return result.length > 0 ? repo : null;
+                }
+
+                // Handle ServiceError
+                const errorMessage = result.message ?? '';
+                if (!errorMessage.includes('not found on Sourcebot server disk')) {
+                    // Log unexpected errors, but not "repo not cloned yet" errors
+                    console.error(
+                        `Error checking activity for repo ${repo.id} (${repo.name}):`,
+                        result
+                    );
                 }
                 return null;
             }));

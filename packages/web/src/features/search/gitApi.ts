@@ -7,10 +7,6 @@ import { sew } from '@/actions';
 import { toGitDate, validateDateRange } from './dateUtils';
 
 const createGitClientForPath = (repoPath: string) => {
-    if (!existsSync(repoPath)) {
-        throw new Error(`Path ${repoPath} does not exist`);
-    }
-
     return simpleGit({
         baseDir: repoPath,
         binary: 'git',

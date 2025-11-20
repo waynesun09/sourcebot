@@ -285,8 +285,8 @@ describe('dateUtils', () => {
             expect(result).toBeUndefined();
         });
 
-        it('should convert unrecognized format to ISO', () => {
-            // For formats git doesn't natively understand, we convert to ISO
+        it('should pass through unrecognized format unchanged', () => {
+            // For formats git doesn't natively understand, pass through to git
             const result = toGitDate('some random string');
             expect(result).toBe('some random string');
         });

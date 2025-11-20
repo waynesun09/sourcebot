@@ -7,8 +7,8 @@ import { NextRequest } from "next/server";
 
 export const GET = async (request: NextRequest) => {
     const searchParams = request.nextUrl.searchParams;
-    const activeAfter = searchParams.get('activeAfter') ?? undefined;
-    const activeBefore = searchParams.get('activeBefore') ?? undefined;
+    const activeAfter = searchParams.get('activeAfter') || undefined;
+    const activeBefore = searchParams.get('activeBefore') || undefined;
 
     const repos: GetReposResponse = await getRepos({
         activeAfter,

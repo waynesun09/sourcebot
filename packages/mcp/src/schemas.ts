@@ -198,7 +198,7 @@ export const searchCommitsRequestSchema = z.object({
     since: z.string().optional(),
     until: z.string().optional(),
     author: z.string().optional(),
-    maxCount: z.number().optional(),
+    maxCount: z.number().int().positive().max(500).optional(),
 });
 
 export const commitSchema = z.object({

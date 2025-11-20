@@ -6,12 +6,17 @@
 /**
  * Parse a date string that can be either:
  * - ISO 8601 format (e.g., "2024-01-01", "2024-01-01T12:00:00Z")
- * - Relative format (e.g., "30 days ago", "1 week ago", "yesterday")
- *
- * Returns an ISO 8601 string suitable for both database queries and git log.
+ * - Relative format (e.g., "30 days ago", "1 week ago", "yesterday", "last week")
  *
  * @param dateStr - The date string to parse
- * @returns ISO 8601 date string or null if invalid
+ * @returns ISO 8601 string if successfully parsed, original string if not parseable (to allow git to try), or undefined if input is falsy
+ *
+ * @example
+ * parseTemporalDate('2024-01-01') // '2024-01-01T00:00:00.000Z'
+ * parseTemporalDate('30 days ago') // Calculates and returns ISO string
+ * parseTemporalDate('yesterday') // Yesterday's date as ISO string
+ * parseTemporalDate('some-git-format') // 'some-git-format' (passed through)
+ * parseTemporalDate(undefined) // undefined
  */
 export function parseTemporalDate(dateStr: string | undefined): string | undefined {
     if (!dateStr) {
@@ -26,12 +31,6 @@ export function parseTemporalDate(dateStr: string | undefined): string | undefin
 
     // Parse relative dates (Git-compatible format)
     // Git accepts these natively, but we normalize to ISO for consistency
-    const relativePatterns = [
-        { pattern: /^(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago$/i, unit: 'relative' },
-        { pattern: /^yesterday$/i, days: 1 },
-        { pattern: /^last\s+(week|month|year)$/i, unit: 'last' },
-    ];
-
     const lowerStr = dateStr.toLowerCase().trim();
 
     // Handle "yesterday"
