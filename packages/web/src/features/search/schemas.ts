@@ -30,6 +30,14 @@ export const searchRequestSchema = z.object({
     contextLines: z.number().optional(),
     // Whether to return the whole file as part of the response.
     whole: z.boolean().optional(),
+    // The git revision to search in.
+    gitRevision: z.string().optional(),
+    // Filter by date. Only show results that were indexed after this date.
+    since: z.string().optional(),
+    // Filter by date. Only show results that were indexed before this date.
+    until: z.string().optional(),
+    // Whether to include deleted files in the search results.
+    includeDeletedFiles: z.boolean().optional(),
 });
 
 export const repositoryInfoSchema = z.object({

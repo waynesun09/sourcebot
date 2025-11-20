@@ -191,3 +191,24 @@ export const serviceErrorSchema = z.object({
     errorCode: z.string(),
     message: z.string(),
 });
+
+export const searchCommitsRequestSchema = z.object({
+    repoId: z.number(),
+    query: z.string().optional(),
+    since: z.string().optional(),
+    until: z.string().optional(),
+    author: z.string().optional(),
+    maxCount: z.number().optional(),
+});
+
+export const commitSchema = z.object({
+    hash: z.string(),
+    date: z.string(),
+    message: z.string(),
+    refs: z.string(),
+    body: z.string(),
+    author_name: z.string(),
+    author_email: z.string(),
+});
+
+export const searchCommitsResponseSchema = z.array(commitSchema);

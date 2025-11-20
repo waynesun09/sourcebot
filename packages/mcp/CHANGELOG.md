@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added comprehensive relative date support for all temporal parameters (e.g., "30 days ago", "last week", "yesterday")
+- Added `search_commits` tool to search commits by actual commit time with full temporal filtering
+- Added `since`/`until` parameters to `search_code` (filters by index time - when Sourcebot indexed the repo)
+- Added `gitRevision`, and `includeDeletedFiles` parameters to `search_code`
+- Added `activeAfter`/`activeBefore` parameters to `list_repos` (filters by commit time - actual git commit dates)
+- Added date range validation to prevent invalid date ranges (since > until)
+- Added 30-second timeout for git operations to handle large repositories
+- Added enhanced error messages for git operations (timeout, repository not found, invalid git repository, ambiguous arguments)
+- Added clarification that repositories must be cloned on Sourcebot server disk for `search_commits` to work
+- Added comprehensive temporal parameter documentation to README with clear distinction between index time and commit time filtering
+- Added comprehensive unit tests for date parsing utilities (90+ test cases)
+- Added unit tests for git commit search functionality with mocking
+- Added integration tests for temporal parameter validation
+
+### Changed
+- Enhanced `list_repos` tool with better pagination feedback messages
+
+### Fixed
+- Fixed `list_repos` pagination bug where `take` limit was applied before activity filtering, returning fewer results than requested
+
 ## [1.0.9] - 2025-11-17
 
 ### Added

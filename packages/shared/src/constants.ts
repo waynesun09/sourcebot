@@ -30,3 +30,9 @@ export const DEFAULT_CONFIG_SETTINGS: ConfigSettings = {
     experiment_repoDrivenPermissionSyncIntervalMs: 1000 * 60 * 60 * 24, // 24 hours
     experiment_userDrivenPermissionSyncIntervalMs: 1000 * 60 * 60 * 24, // 24 hours
 }
+
+import { env } from "./env.server.js";
+import path from "path";
+
+export const REPOS_CACHE_DIR = path.join(env.DATA_CACHE_DIR, 'repos');
+export const INDEX_CACHE_DIR = path.join(env.DATA_CACHE_DIR, 'index');

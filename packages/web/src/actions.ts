@@ -312,12 +312,12 @@ export const createApiKey = async (name: string, domain: string): Promise<{ key:
     withAuth((userId) =>
         withOrgMembership(userId, domain, async ({ org, userRole }) => {
             if (env.EXPERIMENT_DISABLE_API_KEY_CREATION_FOR_NON_ADMIN_USERS === 'true' && userRole !== OrgRole.OWNER) {
-               logger.error(`API key creation is disabled for non-admin users. User ${userId} is not an owner.`);
-               return {
-                statusCode: StatusCodes.FORBIDDEN,
-                errorCode: ErrorCode.INSUFFICIENT_PERMISSIONS,
-                message: "API key creation is disabled for non-admin users.",
-               } satisfies ServiceError;
+                logger.error(`API key creation is disabled for non-admin users. User ${userId} is not an owner.`);
+                return {
+                    statusCode: StatusCodes.FORBIDDEN,
+                    errorCode: ErrorCode.INSUFFICIENT_PERMISSIONS,
+                    message: "API key creation is disabled for non-admin users.",
+                } satisfies ServiceError;
             }
 
             const existingApiKey = await prisma.apiKey.findFirst({
@@ -460,23 +460,75 @@ export const getUserApiKeys = async (domain: string): Promise<{ name: string; cr
             }));
         })));
 
+import { searchCommits } from "./features/search/gitApi";
+
 export const getRepos = async ({
     where,
     take,
+    activeAfter,
+    activeBefore,
 }: {
     where?: Prisma.RepoWhereInput,
-    take?: number
+    take?: number,
+    activeAfter?: string,
+    activeBefore?: string,
 } = {}) => sew(() =>
     withOptionalAuthV2(async ({ org, prisma }) => {
+        // When filtering by activity, we need to fetch all repos first,
+        // then apply pagination after filtering
+        const shouldFilterByActivity = activeAfter || activeBefore;
+
         const repos = await prisma.repo.findMany({
             where: {
                 orgId: org.id,
                 ...where,
             },
-            take,
+            // Only apply take limit if NOT filtering by activity
+            // Otherwise, we'll apply it after activity filtering
+            take: shouldFilterByActivity ? undefined : take,
+            orderBy: {
+                name: 'asc', // Consistent ordering for pagination
+            },
         });
 
-        return repos.map((repo) => repositoryQuerySchema.parse({
+        let filteredRepos = repos;
+
+        if (shouldFilterByActivity) {
+            // Filter repos by commit activity using git log
+            // Note: This requires repos to be cloned locally
+            const activityChecks = await Promise.all(repos.map(async (repo) => {
+                try {
+                    const commits = await searchCommits({
+                        repoId: repo.id,
+                        since: activeAfter,
+                        until: activeBefore,
+                        maxCount: 1,
+                    });
+
+                    if (Array.isArray(commits) && commits.length > 0) {
+                        return repo;
+                    }
+                } catch (e) {
+                    // If error (e.g. repo not found on disk), exclude it from results
+                    // This is expected for repos that haven't been cloned yet
+                    const errorMessage = e instanceof Error ? e.message : String(e);
+                    if (!errorMessage.includes('does not exist')) {
+                        // Log unexpected errors, but not "repo not on disk" errors
+                        console.error(`Error checking activity for repo ${repo.id} (${repo.name}):`, e);
+                    }
+                }
+                return null;
+            }));
+
+            filteredRepos = activityChecks.filter((r): r is typeof repos[0] => r !== null);
+
+            // Apply pagination after filtering
+            if (take) {
+                filteredRepos = filteredRepos.slice(0, take);
+            }
+        }
+
+        return filteredRepos.map((repo) => repositoryQuerySchema.parse({
             codeHostType: repo.external_codeHostType,
             repoId: repo.id,
             repoName: repo.name,

@@ -1,0 +1,438 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { searchCommits } from './gitApi';
+import * as dateUtils from './dateUtils';
+
+// Mock dependencies
+vi.mock('simple-git');
+vi.mock('fs');
+vi.mock('@sourcebot/shared', () => ({
+    REPOS_CACHE_DIR: '/mock/cache/dir',
+}));
+vi.mock('@/lib/serviceError', () => ({
+    unexpectedError: (message: string) => ({
+        errorCode: 'UNEXPECTED_ERROR',
+        message,
+    }),
+}));
+vi.mock('@/actions', () => ({
+    sew: (fn: () => any) => fn(),
+}));
+
+// Import mocked modules
+import { simpleGit } from 'simple-git';
+import { existsSync } from 'fs';
+
+describe('searchCommits', () => {
+    const mockGitLog = vi.fn();
+    const mockSimpleGit = simpleGit as any;
+    const mockExistsSync = existsSync as any;
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+
+        // Setup default mocks
+        mockExistsSync.mockReturnValue(true);
+        mockSimpleGit.mockReturnValue({
+            log: mockGitLog,
+        });
+    });
+
+    describe('repository validation', () => {
+        it('should return error when repository does not exist on disk', async () => {
+            mockExistsSync.mockReturnValue(false);
+
+            const result = await searchCommits({
+                repoId: 123,
+            });
+
+            expect(result).toMatchObject({
+                errorCode: 'UNEXPECTED_ERROR',
+                message: expect.stringContaining('not found on Sourcebot server disk'),
+            });
+            expect(result).toMatchObject({
+                message: expect.stringContaining('123'),
+            });
+        });
+
+        it('should check the correct repository path', async () => {
+            mockExistsSync.mockReturnValue(false);
+
+            await searchCommits({
+                repoId: 456,
+            });
+
+            expect(mockExistsSync).toHaveBeenCalledWith('/mock/cache/dir/456');
+        });
+    });
+
+    describe('date range validation', () => {
+        it('should validate date range and return error for invalid range', async () => {
+            vi.spyOn(dateUtils, 'validateDateRange').mockReturnValue(
+                'Invalid date range: since must be before until'
+            );
+
+            const result = await searchCommits({
+                repoId: 123,
+                since: '2024-12-31',
+                until: '2024-01-01',
+            });
+
+            expect(result).toMatchObject({
+                errorCode: 'UNEXPECTED_ERROR',
+                message: 'Invalid date range: since must be before until',
+            });
+        });
+
+        it('should proceed when date range is valid', async () => {
+            vi.spyOn(dateUtils, 'validateDateRange').mockReturnValue(null);
+            vi.spyOn(dateUtils, 'toGitDate').mockImplementation((date) => date);
+            mockGitLog.mockResolvedValue({ all: [] });
+
+            const result = await searchCommits({
+                repoId: 123,
+                since: '2024-01-01',
+                until: '2024-12-31',
+            });
+
+            expect(Array.isArray(result)).toBe(true);
+        });
+    });
+
+    describe('date parsing', () => {
+        it('should parse dates using toGitDate', async () => {
+            const toGitDateSpy = vi.spyOn(dateUtils, 'toGitDate');
+            toGitDateSpy.mockImplementation((date) => date);
+            mockGitLog.mockResolvedValue({ all: [] });
+
+            await searchCommits({
+                repoId: 123,
+                since: '30 days ago',
+                until: 'yesterday',
+            });
+
+            expect(toGitDateSpy).toHaveBeenCalledWith('30 days ago');
+            expect(toGitDateSpy).toHaveBeenCalledWith('yesterday');
+        });
+
+        it('should pass parsed dates to git log', async () => {
+            vi.spyOn(dateUtils, 'toGitDate')
+                .mockReturnValueOnce('2024-01-01')
+                .mockReturnValueOnce('2024-12-31');
+            mockGitLog.mockResolvedValue({ all: [] });
+
+            await searchCommits({
+                repoId: 123,
+                since: '30 days ago',
+                until: 'yesterday',
+            });
+
+            expect(mockGitLog).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    '--since': '2024-01-01',
+                    '--until': '2024-12-31',
+                })
+            );
+        });
+    });
+
+    describe('git log options', () => {
+        beforeEach(() => {
+            vi.spyOn(dateUtils, 'toGitDate').mockImplementation((date) => date);
+            mockGitLog.mockResolvedValue({ all: [] });
+        });
+
+        it('should set default maxCount', async () => {
+            await searchCommits({
+                repoId: 123,
+            });
+
+            expect(mockGitLog).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    maxCount: 50,
+                })
+            );
+        });
+
+        it('should use custom maxCount', async () => {
+            await searchCommits({
+                repoId: 123,
+                maxCount: 100,
+            });
+
+            expect(mockGitLog).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    maxCount: 100,
+                })
+            );
+        });
+
+        it('should add --since when since is provided', async () => {
+            await searchCommits({
+                repoId: 123,
+                since: '30 days ago',
+            });
+
+            expect(mockGitLog).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    '--since': '30 days ago',
+                })
+            );
+        });
+
+        it('should add --until when until is provided', async () => {
+            await searchCommits({
+                repoId: 123,
+                until: 'yesterday',
+            });
+
+            expect(mockGitLog).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    '--until': 'yesterday',
+                })
+            );
+        });
+
+        it('should add --author when author is provided', async () => {
+            await searchCommits({
+                repoId: 123,
+                author: 'john@example.com',
+            });
+
+            expect(mockGitLog).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    '--author': 'john@example.com',
+                })
+            );
+        });
+
+        it('should add --grep and --regexp-ignore-case when query is provided', async () => {
+            await searchCommits({
+                repoId: 123,
+                query: 'fix bug',
+            });
+
+            expect(mockGitLog).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    '--grep': 'fix bug',
+                    '--regexp-ignore-case': null,
+                })
+            );
+        });
+
+        it('should combine all options', async () => {
+            await searchCommits({
+                repoId: 123,
+                query: 'feature',
+                since: '2024-01-01',
+                until: '2024-12-31',
+                author: 'jane@example.com',
+                maxCount: 25,
+            });
+
+            expect(mockGitLog).toHaveBeenCalledWith({
+                maxCount: 25,
+                '--since': '2024-01-01',
+                '--until': '2024-12-31',
+                '--author': 'jane@example.com',
+                '--grep': 'feature',
+                '--regexp-ignore-case': null,
+            });
+        });
+    });
+
+    describe('successful responses', () => {
+        it('should return commit array from git log', async () => {
+            const mockCommits = [
+                {
+                    hash: 'abc123',
+                    date: '2024-06-15',
+                    message: 'feat: add feature',
+                    refs: 'HEAD -> main',
+                    body: '',
+                    author_name: 'John Doe',
+                    author_email: 'john@example.com',
+                },
+                {
+                    hash: 'def456',
+                    date: '2024-06-14',
+                    message: 'fix: bug fix',
+                    refs: '',
+                    body: '',
+                    author_name: 'Jane Smith',
+                    author_email: 'jane@example.com',
+                },
+            ];
+
+            mockGitLog.mockResolvedValue({ all: mockCommits });
+
+            const result = await searchCommits({
+                repoId: 123,
+            });
+
+            expect(result).toEqual(mockCommits);
+        });
+
+        it('should return empty array when no commits match', async () => {
+            mockGitLog.mockResolvedValue({ all: [] });
+
+            const result = await searchCommits({
+                repoId: 123,
+                query: 'nonexistent',
+            });
+
+            expect(result).toEqual([]);
+        });
+    });
+
+    describe('error handling', () => {
+        it('should return error for "not a git repository"', async () => {
+            mockGitLog.mockRejectedValue(new Error('not a git repository'));
+
+            const result = await searchCommits({
+                repoId: 123,
+            });
+
+            expect(result).toMatchObject({
+                errorCode: 'UNEXPECTED_ERROR',
+                message: expect.stringContaining('not a valid git repository'),
+            });
+        });
+
+        it('should return error for "ambiguous argument"', async () => {
+            mockGitLog.mockRejectedValue(new Error('ambiguous argument'));
+
+            const result = await searchCommits({
+                repoId: 123,
+                since: 'invalid-date',
+            });
+
+            expect(result).toMatchObject({
+                errorCode: 'UNEXPECTED_ERROR',
+                message: expect.stringContaining('Invalid git reference or date format'),
+            });
+        });
+
+        it('should return error for timeout', async () => {
+            mockGitLog.mockRejectedValue(new Error('timeout exceeded'));
+
+            const result = await searchCommits({
+                repoId: 123,
+            });
+
+            expect(result).toMatchObject({
+                errorCode: 'UNEXPECTED_ERROR',
+                message: expect.stringContaining('timed out'),
+            });
+        });
+
+        it('should throw for other Error instances', async () => {
+            mockGitLog.mockRejectedValue(new Error('some other error'));
+
+            await expect(
+                searchCommits({
+                    repoId: 123,
+                })
+            ).rejects.toThrow('Failed to search commits in repository 123');
+        });
+
+        it('should throw for non-Error exceptions', async () => {
+            mockGitLog.mockRejectedValue('string error');
+
+            await expect(
+                searchCommits({
+                    repoId: 123,
+                })
+            ).rejects.toThrow('Failed to search commits in repository 123');
+        });
+    });
+
+    describe('git client configuration', () => {
+        it('should configure simple-git with correct options', async () => {
+            mockGitLog.mockResolvedValue({ all: [] });
+
+            await searchCommits({
+                repoId: 123,
+            });
+
+            expect(mockSimpleGit).toHaveBeenCalledWith({
+                baseDir: '/mock/cache/dir/123',
+                binary: 'git',
+                maxConcurrentProcesses: 6,
+                timeout: {
+                    block: 30000,
+                },
+            });
+        });
+
+        it('should create git client for the correct repository path', async () => {
+            mockGitLog.mockResolvedValue({ all: [] });
+
+            await searchCommits({
+                repoId: 456,
+            });
+
+            expect(mockSimpleGit).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    baseDir: '/mock/cache/dir/456',
+                })
+            );
+        });
+    });
+
+    describe('integration scenarios', () => {
+        it('should handle a typical commit search with filters', async () => {
+            const mockCommits = [
+                {
+                    hash: 'abc123',
+                    date: '2024-06-10T14:30:00Z',
+                    message: 'fix: resolve authentication bug',
+                    refs: 'HEAD -> main',
+                    body: 'Fixed issue with JWT token validation',
+                    author_name: 'Security Team',
+                    author_email: 'security@example.com',
+                },
+            ];
+
+            vi.spyOn(dateUtils, 'validateDateRange').mockReturnValue(null);
+            vi.spyOn(dateUtils, 'toGitDate').mockImplementation((date) => date);
+            mockGitLog.mockResolvedValue({ all: mockCommits });
+
+            const result = await searchCommits({
+                repoId: 123,
+                query: 'authentication',
+                since: '30 days ago',
+                until: 'yesterday',
+                author: 'security',
+                maxCount: 20,
+            });
+
+            expect(result).toEqual(mockCommits);
+            expect(mockGitLog).toHaveBeenCalledWith({
+                maxCount: 20,
+                '--since': '30 days ago',
+                '--until': 'yesterday',
+                '--author': 'security',
+                '--grep': 'authentication',
+                '--regexp-ignore-case': null,
+            });
+        });
+
+        it('should handle repository not cloned yet', async () => {
+            mockExistsSync.mockReturnValue(false);
+
+            const result = await searchCommits({
+                repoId: 999,
+                query: 'feature',
+            });
+
+            expect(result).toMatchObject({
+                errorCode: 'UNEXPECTED_ERROR',
+            });
+            expect(result).toHaveProperty('message');
+            const message = (result as any).message;
+            expect(message).toContain('999');
+            expect(message).toContain('not found on Sourcebot server disk');
+            expect(message).toContain('cloning process may not be finished yet');
+        });
+    });
+});
