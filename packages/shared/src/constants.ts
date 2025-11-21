@@ -36,3 +36,6 @@ import path from "path";
 
 export const REPOS_CACHE_DIR = path.join(env.DATA_CACHE_DIR, 'repos');
 export const INDEX_CACHE_DIR = path.join(env.DATA_CACHE_DIR, 'index');
+
+export const ACTIVITY_FILTER_MAX_SCAN_LIMIT = 200;
+export const ACTIVITY_FILTER_CONCURRENCY_LIMIT = 10;

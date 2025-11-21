@@ -1,7 +1,18 @@
 'use server';
 
 import { getAuditService } from "@/ee/features/audit/factory";
-import { env } from "@sourcebot/shared";
+import {
+    env,
+    REPOS_CACHE_DIR,
+    ACTIVITY_FILTER_MAX_SCAN_LIMIT,
+    ACTIVITY_FILTER_CONCURRENCY_LIMIT,
+    generateApiKey,
+    getTokenFromConfig,
+    hashSecret,
+    createLogger,
+    getPlan,
+    hasEntitlement
+} from "@sourcebot/shared";
 import { addUserToOrganization, orgHasAvailability } from "@/lib/authUtils";
 import { ErrorCode } from "@/lib/errorCodes";
 import { notAuthenticated, notFound, orgNotFound, ServiceError, ServiceErrorException, unexpectedError } from "@/lib/serviceError";
@@ -9,13 +20,10 @@ import { getOrgMetadata, isHttpError, isServiceError } from "@/lib/utils";
 import { prisma } from "@/prisma";
 import { render } from "@react-email/components";
 import * as Sentry from '@sentry/nextjs';
-import { generateApiKey, getTokenFromConfig, hashSecret } from "@sourcebot/shared";
 import { ApiKey, ConnectionSyncJobStatus, Org, OrgRole, Prisma, RepoIndexingJobStatus, RepoIndexingJobType, StripeSubscriptionStatus } from "@sourcebot/db";
-import { createLogger } from "@sourcebot/shared";
 import { GiteaConnectionConfig } from "@sourcebot/schemas/v3/gitea.type";
 import { GithubConnectionConfig } from "@sourcebot/schemas/v3/github.type";
 import { GitlabConnectionConfig } from "@sourcebot/schemas/v3/gitlab.type";
-import { getPlan, hasEntitlement } from "@sourcebot/shared";
 import { StatusCodes } from "http-status-codes";
 import { cookies, headers } from "next/headers";
 import { createTransport } from "nodemailer";
@@ -483,50 +491,60 @@ export const getRepos = async ({
                 orgId: org.id,
                 ...where,
             },
-            // Only apply take limit if NOT filtering by activity
-            // Otherwise, we'll apply it after activity filtering
-            take: shouldFilterByActivity ? undefined : take,
+            // If filtering by activity, fetch candidates up to the safety cap.
+            // Otherwise, apply the requested limit directly.
+            take: shouldFilterByActivity ? ACTIVITY_FILTER_MAX_SCAN_LIMIT : take,
             orderBy: {
                 name: 'asc', // Consistent ordering for pagination
             },
         });
 
-        let filteredRepos = repos;
+        let filteredRepos: typeof repos = [];
 
         if (shouldFilterByActivity) {
-            // Filter repos by commit activity using git log
-            // Note: This requires repos to be cloned locally
-            const activityChecks = await Promise.all(repos.map(async (repo) => {
-                const result = await searchCommits({
-                    repoId: repo.id,
-                    since: activeAfter,
-                    until: activeBefore,
-                    maxCount: 1,
-                });
-
-                // Handle successful result
-                if (Array.isArray(result)) {
-                    return result.length > 0 ? repo : null;
+            // Process in chunks to limit concurrency
+            for (let i = 0; i < repos.length; i += ACTIVITY_FILTER_CONCURRENCY_LIMIT) {
+                // Stop if we have enough matches
+                if (take && filteredRepos.length >= take) {
+                    break;
                 }
 
-                // Handle ServiceError
-                const errorMessage = result.message ?? '';
-                if (!errorMessage.includes('not found on Sourcebot server disk')) {
-                    // Log unexpected errors, but not "repo not cloned yet" errors
-                    console.error(
-                        `Error checking activity for repo ${repo.id} (${repo.name}):`,
-                        result
-                    );
-                }
-                return null;
-            }));
+                const chunk = repos.slice(i, i + ACTIVITY_FILTER_CONCURRENCY_LIMIT);
+                const activityChecks = await Promise.all(chunk.map(async (repo) => {
+                    const result = await searchCommits({
+                        repoId: repo.id,
+                        since: activeAfter,
+                        until: activeBefore,
+                        maxCount: 1,
+                    });
 
-            filteredRepos = activityChecks.filter((r): r is typeof repos[0] => r !== null);
+                    // Handle successful result
+                    if (Array.isArray(result)) {
+                        return result.length > 0 ? repo : null;
+                    }
 
-            // Apply pagination after filtering
+                    // Handle ServiceError
+                    const errorMessage = result.message ?? '';
+                    if (!errorMessage.includes('not found on Sourcebot server disk')) {
+                        // Log unexpected errors, but not "repo not cloned yet" errors
+                        console.error(
+                            `Error checking activity for repo ${repo.id} (${repo.name}):`,
+                            result
+                        );
+                    }
+                    return null;
+                }));
+
+                const activeInChunk = activityChecks.filter((r): r is typeof repos[0] => r !== null);
+                filteredRepos.push(...activeInChunk);
+            }
+
+            // Apply final limit
             if (take) {
                 filteredRepos = filteredRepos.slice(0, take);
             }
+        } else {
+            filteredRepos = repos;
         }
 
         return filteredRepos.map((repo) => repositoryQuerySchema.parse({
