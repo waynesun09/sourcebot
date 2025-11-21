@@ -194,7 +194,11 @@ server.tool(
 
     If you receive an error that indicates that you're not authenticated, please inform the user to set the SOURCEBOT_API_KEY environment variable.`,
     {
-        repoId: z.number().describe(`The ID of the repository to search in. Obtain this by calling 'list_repos' first.`),
+        repoId: z.union([z.number(), z.string()]).describe(`Repository identifier. Can be either:
+        - Numeric database ID (e.g., 123)
+        - Full repository name (e.g., "github.com/owner/repo") as returned by 'list_repos'
+
+        **YOU MUST** call 'list_repos' first to obtain the repository identifier.`),
         query: z.string().describe(`Search query to filter commits by message content (case-insensitive).`).optional(),
         since: z.string().describe(`Show commits more recent than this date. Filters by actual commit time. Supports ISO 8601 (e.g., '2024-01-01') or relative formats (e.g., '30 days ago', 'last week').`).optional(),
         until: z.string().describe(`Show commits older than this date. Filters by actual commit time. Supports ISO 8601 (e.g., '2024-12-31') or relative formats (e.g., 'yesterday').`).optional(),

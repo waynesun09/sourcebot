@@ -230,7 +230,7 @@ Searches for commits in a specific repository based on actual commit time (NOT i
 
 | Name       | Required | Description                                                                                    |
 |:-----------|:---------|:-----------------------------------------------------------------------------------------------|
-| `repoId`   | yes      | Repository ID (obtain from `list_repos`).                                                      |
+| `repoId`   | yes      | Repository identifier: either numeric database ID (e.g., 123) or full repository name (e.g., "github.com/owner/repo") as returned by `list_repos`. |
 | `query`    | no       | Search query to filter commits by message (case-insensitive).                                  |
 | `since`    | no       | Show commits after this date (by commit time). Supports ISO 8601 or relative formats.          |
 | `until`    | no       | Show commits before this date (by commit time). Supports ISO 8601 or relative formats.         |

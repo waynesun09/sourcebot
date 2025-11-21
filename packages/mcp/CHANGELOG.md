@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Added comprehensive relative date support for all temporal parameters (e.g., "30 days ago", "last week", "yesterday")
-- Added `search_commits` tool to search commits by actual commit time with full temporal filtering
+- Added `search_commits` tool to search commits by actual commit time with full temporal filtering. Accepts both numeric database IDs (e.g., 123) and string repository names (e.g., "github.com/owner/repo") for the `repoId` parameter, allowing direct use of repository names from `list_repos` output
 - Added `since`/`until` parameters to `search_code` (filters by index time - when Sourcebot indexed the repo)
 - Added `gitRevision` parameter to `search_code`
 - Added `activeAfter`/`activeBefore` parameters to `list_repos` (filters by commit time - actual git commit dates)
@@ -21,12 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added comprehensive unit tests for date parsing utilities (90+ test cases)
 - Added unit tests for git commit search functionality with mocking
 - Added integration tests for temporal parameter validation
-
-### Changed
-- Enhanced `list_repos` tool with better pagination feedback messages
-
-### Fixed
-- Fixed `list_repos` pagination bug where `take` limit was applied before activity filtering, returning fewer results than requested
+- Added unit tests for repository identifier resolution (both string and number types)
 
 ## [1.0.9] - 2025-11-17
 

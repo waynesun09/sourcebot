@@ -169,7 +169,7 @@ export const fileSourceResponseSchema = z.object({
 });
 
 export const searchCommitsRequestSchema = z.object({
-    repoId: z.number(),
+    repoId: z.union([z.number(), z.string()]),
     query: z.string().optional(),
     since: z.string().optional(),
     until: z.string().optional(),

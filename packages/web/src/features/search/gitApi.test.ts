@@ -27,6 +27,26 @@ vi.mock('@/actions', () => ({
         }
     },
 }));
+// Create a mock findFirst function that we can configure per-test
+const mockFindFirst = vi.fn();
+
+vi.mock('@/withAuthV2', () => ({
+    withOptionalAuthV2: async (fn: (args: any) => any) => {
+        // Mock withOptionalAuthV2 to provide org and prisma context
+        const mockOrg = { id: 1, name: 'test-org' };
+        const mockPrisma = {
+            repo: {
+                findFirst: mockFindFirst,
+            },
+        };
+        return await fn({ org: mockOrg, prisma: mockPrisma });
+    },
+}));
+vi.mock('@/lib/utils', () => ({
+    isServiceError: (obj: any) => {
+        return obj && typeof obj === 'object' && 'errorCode' in obj;
+    },
+}));
 
 // Import mocked modules
 import { simpleGit } from 'simple-git';
@@ -449,6 +469,107 @@ describe('searchCommits', () => {
             expect(message).toContain('999');
             expect(message).toContain('not found on Sourcebot server disk');
             expect(message).toContain('cloning process may not be finished yet');
+        });
+    });
+
+    describe('repository identifier resolution', () => {
+        beforeEach(() => {
+            // Reset mockFindFirst before each test in this suite
+            mockFindFirst.mockReset();
+        });
+
+        it('should accept numeric repository ID', async () => {
+            mockGitLog.mockResolvedValue({ all: [] });
+
+            const result = await searchCommits({
+                repoId: 123,
+            });
+
+            expect(Array.isArray(result)).toBe(true);
+            expect(mockExistsSync).toHaveBeenCalledWith('/mock/cache/dir/123');
+            // mockFindFirst should not be called for numeric IDs
+            expect(mockFindFirst).not.toHaveBeenCalled();
+        });
+
+        it('should accept string repository name and resolve to numeric ID', async () => {
+            mockFindFirst.mockResolvedValue({ id: 456 });
+            mockGitLog.mockResolvedValue({ all: [] });
+
+            const result = await searchCommits({
+                repoId: 'github.com/owner/repo',
+            });
+
+            expect(Array.isArray(result)).toBe(true);
+            expect(mockExistsSync).toHaveBeenCalledWith('/mock/cache/dir/456');
+            expect(mockFindFirst).toHaveBeenCalledWith({
+                where: {
+                    name: 'github.com/owner/repo',
+                    orgId: 1,
+                },
+                select: { id: true },
+            });
+        });
+
+        it('should return error when string repository name is not found', async () => {
+            mockFindFirst.mockResolvedValue(null);
+
+            const result = await searchCommits({
+                repoId: 'github.com/nonexistent/repo',
+            });
+
+            expect(result).toMatchObject({
+                errorCode: 'UNEXPECTED_ERROR',
+                message: expect.stringContaining('Repository "github.com/nonexistent/repo" not found'),
+            });
+            expect(result).toMatchObject({
+                message: expect.stringContaining('Use \'list_repos\' to get valid repository identifiers'),
+            });
+        });
+
+        it('should query database with correct parameters for string repo name', async () => {
+            mockFindFirst.mockResolvedValue({ id: 789 });
+            mockGitLog.mockResolvedValue({ all: [] });
+
+            await searchCommits({
+                repoId: 'github.com/example/project',
+            });
+
+            expect(mockFindFirst).toHaveBeenCalledWith({
+                where: {
+                    name: 'github.com/example/project',
+                    orgId: 1,
+                },
+                select: { id: true },
+            });
+        });
+
+        it('should work with string repo name in full search scenario', async () => {
+            const mockCommits = [
+                {
+                    hash: 'xyz789',
+                    date: '2024-06-20T10:00:00Z',
+                    message: 'feat: new feature',
+                    refs: 'main',
+                    body: 'Added new functionality',
+                    author_name: 'Developer',
+                    author_email: 'dev@example.com',
+                },
+            ];
+
+            mockFindFirst.mockResolvedValue({ id: 555 });
+            vi.spyOn(dateUtils, 'validateDateRange').mockReturnValue(null);
+            vi.spyOn(dateUtils, 'toGitDate').mockImplementation((date) => date);
+            mockGitLog.mockResolvedValue({ all: mockCommits });
+
+            const result = await searchCommits({
+                repoId: 'github.com/test/repository',
+                query: 'feature',
+                since: '7 days ago',
+                author: 'Developer',
+            });
+
+            expect(result).toEqual(mockCommits);
+            expect(mockExistsSync).toHaveBeenCalledWith('/mock/cache/dir/555');
         });
     });
 });

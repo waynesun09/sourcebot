@@ -5,6 +5,8 @@ import path from 'path';
 import { ServiceError, unexpectedError } from '@/lib/serviceError';
 import { sew } from '@/actions';
 import { toGitDate, validateDateRange } from './dateUtils';
+import { withOptionalAuthV2 } from '@/withAuthV2';
+import { isServiceError } from '@/lib/utils';
 
 const createGitClientForPath = (repoPath: string) => {
     return simpleGit({
@@ -17,8 +19,46 @@ const createGitClientForPath = (repoPath: string) => {
     });
 }
 
+/**
+ * Resolves a repository identifier to a numeric ID.
+ * Accepts both numeric IDs and string repository names.
+ *
+ * @param identifier - Either a numeric repo ID or a string repo name (e.g., "github.com/owner/repo")
+ * @param orgId - Organization ID to scope the lookup
+ * @param prisma - Prisma client instance
+ * @returns Numeric repository ID or ServiceError if not found
+ */
+const resolveRepoId = async (
+    identifier: string | number,
+    orgId: number,
+    prisma: any
+): Promise<number | ServiceError> => {
+    // If already numeric, return as-is
+    if (typeof identifier === 'number') {
+        return identifier;
+    }
+
+    // Convert string name to numeric ID
+    const repo = await prisma.repo.findFirst({
+        where: {
+            name: identifier,
+            orgId: orgId,
+        },
+        select: { id: true }
+    });
+
+    if (!repo) {
+        return unexpectedError(
+            `Repository "${identifier}" not found. ` +
+            `Use 'list_repos' to get valid repository identifiers.`
+        );
+    }
+
+    return repo.id;
+}
+
 export interface SearchCommitsRequest {
-    repoId: number;
+    repoId: string | number;
     query?: string;
     since?: string;
     until?: string;
@@ -48,18 +88,28 @@ export interface Commit {
  * process might not be finished when this query is executed. If the repository
  * is not found on the server disk, an error will be returned.
  *
+ * **Repository ID**: Accepts either a numeric database ID or a string repository name
+ * (e.g., "github.com/owner/repo") as returned by list_repos.
+ *
  * @param request - Search parameters including timeframe filters
  * @returns Array of commits or ServiceError
  */
 export const searchCommits = async ({
-    repoId,
+    repoId: repoIdInput,
     query,
     since,
     until,
     author,
     maxCount = 50,
-}: SearchCommitsRequest): Promise<Commit[] | ServiceError> => sew(async () => {
-    const repoPath = path.join(REPOS_CACHE_DIR, repoId.toString());
+}: SearchCommitsRequest): Promise<Commit[] | ServiceError> => sew(() =>
+    withOptionalAuthV2(async ({ org, prisma }) => {
+        // Resolve repository identifier to numeric ID
+        const repoId = await resolveRepoId(repoIdInput, org.id, prisma);
+        if (isServiceError(repoId)) {
+            return repoId;
+        }
+
+        const repoPath = path.join(REPOS_CACHE_DIR, repoId.toString());
 
     // Check if repository exists on Sourcebot server disk
     if (!existsSync(repoPath)) {
@@ -143,4 +193,4 @@ export const searchCommits = async ({
             );
         }
     }
-});
+}));
