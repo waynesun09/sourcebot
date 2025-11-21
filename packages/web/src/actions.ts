@@ -3,7 +3,6 @@
 import { getAuditService } from "@/ee/features/audit/factory";
 import {
     env,
-    REPOS_CACHE_DIR,
     ACTIVITY_FILTER_MAX_SCAN_LIMIT,
     ACTIVITY_FILTER_CONCURRENCY_LIMIT,
     generateApiKey,

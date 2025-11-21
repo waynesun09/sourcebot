@@ -7,6 +7,7 @@ import { sew } from '@/actions';
 import { toGitDate, validateDateRange } from './dateUtils';
 import { withOptionalAuthV2 } from '@/withAuthV2';
 import { isServiceError } from '@/lib/utils';
+import type { PrismaClient } from '@sourcebot/db';
 
 const createGitClientForPath = (repoPath: string) => {
     return simpleGit({
@@ -31,7 +32,7 @@ const createGitClientForPath = (repoPath: string) => {
 const resolveRepoId = async (
     identifier: string | number,
     orgId: number,
-    prisma: any
+    prisma: PrismaClient
 ): Promise<number | ServiceError> => {
     // If already numeric, return as-is
     if (typeof identifier === 'number') {
@@ -134,7 +135,7 @@ export const searchCommits = async ({
     const git = createGitClientForPath(repoPath);
 
     try {
-        const logOptions: any = {
+        const logOptions: Record<string, string | number | null> = {
             maxCount,
         };
 

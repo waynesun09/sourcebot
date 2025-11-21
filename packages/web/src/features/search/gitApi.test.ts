@@ -15,7 +15,7 @@ vi.mock('@/lib/serviceError', () => ({
     }),
 }));
 vi.mock('@/actions', () => ({
-    sew: async (fn: () => any) => {
+    sew: async <T>(fn: () => Promise<T> | T): Promise<T> => {
         try {
             return await fn();
         } catch (error) {
@@ -23,7 +23,7 @@ vi.mock('@/actions', () => ({
             return {
                 errorCode: 'UNEXPECTED_ERROR',
                 message: error instanceof Error ? error.message : String(error),
-            };
+            } as T;
         }
     },
 }));
@@ -31,7 +31,7 @@ vi.mock('@/actions', () => ({
 const mockFindFirst = vi.fn();
 
 vi.mock('@/withAuthV2', () => ({
-    withOptionalAuthV2: async (fn: (args: any) => any) => {
+    withOptionalAuthV2: async <T>(fn: (args: { org: { id: number; name: string }; prisma: unknown }) => Promise<T>): Promise<T> => {
         // Mock withOptionalAuthV2 to provide org and prisma context
         const mockOrg = { id: 1, name: 'test-org' };
         const mockPrisma = {
@@ -43,8 +43,8 @@ vi.mock('@/withAuthV2', () => ({
     },
 }));
 vi.mock('@/lib/utils', () => ({
-    isServiceError: (obj: any) => {
-        return obj && typeof obj === 'object' && 'errorCode' in obj;
+    isServiceError: (obj: unknown): obj is { errorCode: string } => {
+        return obj !== null && typeof obj === 'object' && 'errorCode' in obj;
     },
 }));
 
@@ -54,8 +54,8 @@ import { existsSync } from 'fs';
 
 describe('searchCommits', () => {
     const mockGitLog = vi.fn();
-    const mockSimpleGit = simpleGit as any;
-    const mockExistsSync = existsSync as any;
+    const mockSimpleGit = simpleGit as unknown as vi.Mock;
+    const mockExistsSync = existsSync as unknown as vi.Mock;
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -465,7 +465,7 @@ describe('searchCommits', () => {
                 errorCode: 'UNEXPECTED_ERROR',
             });
             expect(result).toHaveProperty('message');
-            const message = (result as any).message;
+            const message = (result as { message: string }).message;
             expect(message).toContain('999');
             expect(message).toContain('not found on Sourcebot server disk');
             expect(message).toContain('cloning process may not be finished yet');
