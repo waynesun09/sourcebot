@@ -138,7 +138,7 @@ export const search = async ({ query, matches, contextLines, whole, gitRevision,
         // Note: This filters by when the repo was last indexed by Sourcebot,
         // not by the actual commit time in the repository.
         if (since || until) {
-            const { toDbDate } = await import('./dateUtils.js');
+            const { toDbDate } = await import('./dateUtils');
 
             const sinceDate = toDbDate(since);
             const untilDate = toDbDate(until);
