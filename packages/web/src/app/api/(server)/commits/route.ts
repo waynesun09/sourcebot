@@ -1,12 +1,11 @@
 import { searchCommits, SearchCommitsRequest } from "@/features/search/gitApi";
-import { serviceErrorResponse } from "@/lib/serviceError";
+import { serviceErrorResponse, schemaValidationError } from "@/lib/serviceError";
 import { isServiceError } from "@/lib/utils";
 import { NextRequest } from "next/server";
-import { schemaValidationError } from "@/lib/serviceError";
 import { searchCommitsRequestSchema } from "@/features/search/schemas";
 import { withOptionalAuthV2 } from "@/withAuthV2";
 
-export const POST = async (request: NextRequest) => withOptionalAuthV2(async () => {
+export async function POST(request: NextRequest): Promise<Response> {
     const body = await request.json();
     const parsed = await searchCommitsRequestSchema.safeParseAsync(body);
 
@@ -16,11 +15,13 @@ export const POST = async (request: NextRequest) => withOptionalAuthV2(async () 
         );
     }
 
-    const response = await searchCommits(parsed.data as SearchCommitsRequest);
+    const result = await withOptionalAuthV2(async () => {
+        return await searchCommits(parsed.data as SearchCommitsRequest);
+    });
 
-    if (isServiceError(response)) {
-        return serviceErrorResponse(response);
+    if (isServiceError(result)) {
+        return serviceErrorResponse(result);
     }
 
-    return Response.json(response);
-});
+    return Response.json(result);
+}
