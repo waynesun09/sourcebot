@@ -30,6 +30,12 @@ export const searchRequestSchema = z.object({
     contextLines: z.number().optional(),
     // Whether to return the whole file as part of the response.
     whole: z.boolean().optional(),
+    // The git revision to search in.
+    gitRevision: z.string().optional(),
+    // Filter by date. Only show results that were indexed after this date.
+    since: z.string().optional(),
+    // Filter by date. Only show results that were indexed before this date.
+    until: z.string().optional(),
 });
 
 export const repositoryInfoSchema = z.object({
@@ -161,3 +167,24 @@ export const fileSourceResponseSchema = z.object({
     branch: z.string().optional(),
     webUrl: z.string().optional(),
 });
+
+export const searchCommitsRequestSchema = z.object({
+    repoId: z.union([z.number(), z.string()]),
+    query: z.string().optional(),
+    since: z.string().optional(),
+    until: z.string().optional(),
+    author: z.string().optional(),
+    maxCount: z.number().int().positive().max(500).optional(),
+});
+
+export const commitSchema = z.object({
+    hash: z.string(),
+    date: z.string(),
+    message: z.string(),
+    refs: z.string(),
+    body: z.string(),
+    author_name: z.string(),
+    author_email: z.string(),
+});
+
+export const searchCommitsResponseSchema = z.array(commitSchema);

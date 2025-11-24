@@ -127,8 +127,70 @@ const getFileWebUrl = (template: string, branch: string, fileName: string): stri
     return encodeURI(url + optionalQueryParams);
 }
 
-export const search = async ({ query, matches, contextLines, whole }: SearchRequest): Promise<SearchResponse | ServiceError> => sew(() =>
+export const search = async ({ query, matches, contextLines, whole, gitRevision, since, until }: SearchRequest): Promise<SearchResponse | ServiceError> => sew(() =>
     withOptionalAuthV2(async ({ org, prisma }) => {
+        // If gitRevision is provided, append it to the query as a branch filter.
+        if (gitRevision) {
+            query = `${query} branch:${gitRevision}`;
+        }
+
+        // If since or until are provided, filter repositories by indexedAt.
+        // Note: This filters by when the repo was last indexed by Sourcebot,
+        // not by the actual commit time in the repository.
+        if (since || until) {
+            const { toDbDate } = await import('./dateUtils');
+
+            const sinceDate = toDbDate(since);
+            const untilDate = toDbDate(until);
+
+            const timeFilterRepos = await prisma.repo.findMany({
+                where: {
+                    orgId: org.id,
+                    indexedAt: {
+                        gte: sinceDate,
+                        lte: untilDate,
+                    }
+                },
+                select: { name: true }
+            });
+
+            if (timeFilterRepos.length === 0) {
+                // If no repos match the time filter, return empty results immediately.
+                return {
+                    stats: {
+                        actualMatchCount: 0,
+                        totalMatchCount: 0,
+                        duration: 0,
+                        fileCount: 0,
+                        filesSkipped: 0,
+                        contentBytesLoaded: 0,
+                        indexBytesLoaded: 0,
+                        crashes: 0,
+                        shardFilesConsidered: 0,
+                        filesConsidered: 0,
+                        filesLoaded: 0,
+                        shardsScanned: 0,
+                        shardsSkipped: 0,
+                        shardsSkippedFilter: 0,
+                        ngramMatches: 0,
+                        ngramLookups: 0,
+                        wait: 0,
+                        matchTreeConstruction: 0,
+                        matchTreeSearch: 0,
+                        regexpsConsidered: 0,
+                        flushReason: 0,
+                    },
+                    files: [],
+                    repositoryInfo: [],
+                    isBranchFilteringEnabled: false,
+                    isSearchExhaustive: true,
+                } satisfies SearchResponse;
+            }
+
+            const repoFilter = timeFilterRepos.map(r => `repo:${r.name}`).join(" or ");
+            query = `(${query}) and (${repoFilter})`;
+        }
+
         const transformedQuery = await transformZoektQuery(query, org.id, prisma);
         if (isServiceError(transformedQuery)) {
             return transformedQuery;

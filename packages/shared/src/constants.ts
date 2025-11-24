@@ -30,3 +30,6 @@ export const DEFAULT_CONFIG_SETTINGS: ConfigSettings = {
     experiment_repoDrivenPermissionSyncIntervalMs: 1000 * 60 * 60 * 24, // 24 hours
     experiment_userDrivenPermissionSyncIntervalMs: 1000 * 60 * 60 * 24, // 24 hours
 }
+
+export const ACTIVITY_FILTER_MAX_SCAN_LIMIT = 200;
+export const ACTIVITY_FILTER_CONCURRENCY_LIMIT = 10;
